@@ -4,7 +4,7 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import config from './config.json' assert { type: 'json' };
-import { AnythingClient } from './lib/anythingClient.js';
+import { AnythingClient } from './lib/dbClient.js';
 import { BotManager } from './lib/botManager.js';
 
 const app = express();
