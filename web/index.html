@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Telegram Autobots — Login</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#0f1724;--card:#0b1220;--accent:#6b8cff;--muted:#9aa4bf;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial;background:linear-gradient(180deg,#071028, #071a2e);color:white;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{width:100%;max-width:680px;background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));border-radius:12px;padding:22px;box-shadow:0 8px 30px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03)}
+h1{margin:0 0 6px;font-size:20px}
+.row{display:flex;gap:12px}
+.col{flex:1}
+.input{width:100%;padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+.label{font-size:12px;color:var(--muted);margin-bottom:6px;display:block}
+.btn{display:inline-block;padding:10px 14px;border-radius:10px;background:linear-gradient(90deg,var(--accent),#3b6bff);border:none;color:white;font-weight:600;cursor:pointer}
+.small{font-size:13px;color:var(--muted);margin-top:8px}
+.footer{margin-top:16px;display:flex;justify-content:space-between;align-items:center}
+.list{margin-top:14px;border-radius:8px;padding:12px;background:rgba(255,255,255,0.02);max-height:220px;overflow:auto}
+.item{padding:8px;border-bottom:1px solid rgba(255,255,255,0.02)}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Start a bot — online bots</h1>
+  <p class="small">Enter Bot Token, Admin ID (owner/admin who can manage it) and optional command prefix. Click Run to store in DB and start the bot.</p>
+
+  <div style="margin-top:12px">
+    <label class="label">Bot Token</label>
+    <input id="token" class="input" placeholder="123456:ABC-DEF..." />
+  </div>
+
+  <div style="margin-top:12px">
+    <label class="label">Admin ID</label>
+    <input id="admin" class="input" placeholder="123456789 (telegram user id)" />
+  </div>
+
+  <div style="margin-top:12px">
+    <label class="label">Prefix (optional) — leave empty for no-prefix mode</label>
+    <input id="prefix" class="input" placeholder="/" />
+  </div>
+
+  <div style="margin-top:14px;display:flex;gap:10px">
+    <button id="run" class="btn">Run</button>
+    <button id="refresh" class="btn" style="background:transparent;border:1px solid rgba(255,255,255,0.06)">Refresh list</button>
+  </div>
+
+  <div class="list" id="list">
+    <!-- bots -->
+  </div>
+
+  <div class="footer">
+    <div class="small">Server: local</div>
+    <div><button id="logoutBtn" class="btn" style="background:#ff6b6b">Logout selected</button></div>
+  </div>
+</div>
+
+<script>
+async function refresh(){
+  const res = await fetch('/api/bot/list');
+  const j = await res.json();
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  (j.db||[]).forEach(b=>{
+    const div = document.createElement('div');
+    div.className='item';
+    div.dataset.username = b.username || '';
+    div.innerHTML = '<strong>'+ (b.username||'(no username)') + '</strong><br>admin: '+b.admin_id + ' prefix: '+b.prefix;
+    div.onclick = ()=> {
+      document.querySelectorAll('.item').forEach(it=>it.style.background='transparent');
+      div.style.background='rgba(255,255,255,0.03)';
+      list.dataset.selected = div.dataset.username;
+    };
+    list.appendChild(div);
+  });
+}
+
+document.getElementById('run').addEventListener('click', async ()=>{
+  const token = document.getElementById('token').value.trim();
+  const admin = document.getElementById('admin').value.trim();
+  const prefix = document.getElementById('prefix').value;
+  if(!token||!admin){ alert('Token and admin required'); return;}
+  const res = await fetch('/api/bot/create', {
+    method:'POST', headers:{'content-type':'application/json'},
+    body: JSON.stringify({ token, admin_id: admin, prefix })
+  });
+  const j = await res.json();
+  if(j.ok){ alert('Created and started: ' + (j.saved.username||'unknown')); refresh(); }
+  else alert('Failed: ' + (j.error||JSON.stringify(j)));
+});
+
+document.getElementById('refresh').addEventListener('click', refresh);
+
+document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+  const list = document.getElementById('list');
+  const username = list.dataset.selected;
+  if(!username){ alert('Select a bot first'); return; }
+  const res = await fetch('/api/bot/logout', {
+    method:'POST', headers:{'content-type':'application/json'},
+    body: JSON.stringify({ username })
+  });
+  const j = await res.json();
+  if(j.ok){ alert('Logged out ' + username); refresh(); }
+  else alert('Failed: '+ (j.error||JSON.stringify(j)));
+});
+
+refresh();
+</script>
+</body>
+  </html>
+    
