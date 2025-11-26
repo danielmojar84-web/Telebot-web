@@ -3,9 +3,11 @@ import bodyParser from 'body-parser';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
-import config from './config.json' assert { type: 'json' };
 import { DBClient } from './lib/dbClient.js';
 import { BotManager, globalBotManager } from './lib/botManager.js';
+
+// Load config.json safely for Node 22 without assert
+const config = JSON.parse(fs.readFileSync(path.resolve('./config.json')));
 
 const app = express();
 app.use(cors());
@@ -13,8 +15,9 @@ app.use(bodyParser.json());
 app.use(express.static('web'));
 
 const db = new DBClient();
-const manager = globalBotManager; // make sure globalBotManager = new BotManager() exported in botManager.js
+const manager = globalBotManager; // BotManager instance exported from lib/botManager.js
 
+// Start all bots from PostgreSQL on server launch
 async function ensureStarted() {
   try {
     await manager.startAll();
