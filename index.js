@@ -4,39 +4,42 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import config from './config.json' assert { type: 'json' };
-import { AnythingClient } from './lib/dbClient.js';
-import { BotManager } from './lib/botManager.js';
+import { DBClient } from './lib/dbClient.js';
+import { BotManager, globalBotManager } from './lib/botManager.js';
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static('web'));
 
-const anything = new AnythingClient(config.anything || {});
-const manager = new BotManager({anythingClient: anything, config});
+const db = new DBClient();
+const manager = globalBotManager; // make sure globalBotManager = new BotManager() exported in botManager.js
 
 async function ensureStarted() {
   try {
-    await manager.startAllFromDB();
+    await manager.startAll();
   } catch(e) {
-    console.error('startAllFromDB failed', e.message);
+    console.error('startAll failed', e.message);
   }
 }
 ensureStarted();
 
-// API: create bot (store in Anything and start)
+// API: create bot (store in PostgreSQL and start)
 app.post('/api/bot/create', async (req, res) => {
   try {
-    const { token, admin_id, prefix } = req.body;
-    if (!token || !admin_id) return res.status(400).json({error:'token and admin_id required'});
-    const meta = {
-      token, admin_id: String(admin_id), prefix: prefix || '/',
-      created_at: new Date().toISOString()
-    };
-    const saved = await anything.insertBot(meta);
-    // Try to start immediately
-    await manager.startBotInstance(saved);
-    return res.json({ok:true, saved});
+    const { token, adminId, prefix } = req.body;
+    if (!token || !adminId) return res.status(400).json({ error:'token and adminId required' });
+
+    const username = token.split(':')[0] + 'bot';
+    const meta = { username, token, adminId: String(adminId), prefix: prefix || '/', status: 'online' };
+
+    await db.insertOrUpdateBot(meta);
+
+    if (!manager.bots.has(username)) {
+      await manager.startBot(meta);
+    }
+
+    return res.json({ ok: true, saved: meta });
   } catch(e) {
     console.error(e);
     return res.status(500).json({ error: e.message });
@@ -46,7 +49,7 @@ app.post('/api/bot/create', async (req, res) => {
 // API: list bots
 app.get('/api/bot/list', async (req, res) => {
   try {
-    const list = await anything.listBots();
+    const list = await db.listBots();
     const running = manager.listRunning();
     return res.json({ db: list, running });
   } catch(e) {
@@ -59,10 +62,10 @@ app.post('/api/bot/logout', async (req, res) => {
   try {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'username required' });
-    // delete from db
-    await anything.deleteBotByUsername(username);
-    // stop running
-    await manager.stopBotByUsername(username);
+
+    await db.deleteBot(username);
+    await manager.stopBot(username);
+
     return res.json({ ok: true });
   } catch(e) {
     return res.status(500).json({ error: e.message });
@@ -70,4 +73,5 @@ app.post('/api/bot/logout', async (req, res) => {
 });
 
 const port = config.port || 3000;
-app.listen(port, ()=>console.log('Server running on port', port));
+app.listen(port, () => console.log('Server running on port', port));
+      
